@@ -1,0 +1,44 @@
+name: Configure Windows VM
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable Remote Desktop
+        shell: powershell
+        run: |
+          Set-ItemProperty `
+            -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
+            -Name "fDenyTSConnections" `
+            -Value 0
+
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+      - name: Install Tailscale
+        shell: powershell
+        run: |
+          $url = "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe"
+          $installer = "$env:TEMP\tailscale-setup.exe"
+
+          Invoke-WebRequest -Uri $url -OutFile $installer
+          Start-Process $installer -ArgumentList "/quiet" -Wait
+
+      - name: Connect Tailscale
+        shell: powershell
+        env:
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+        run: |
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up `
+            --auth-key="$env:TS_AUTHKEY" `
+            --hostname="windows-vm"
+
+      - name: Show Tailscale status
+        shell: powershell
+        run: |
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" status
